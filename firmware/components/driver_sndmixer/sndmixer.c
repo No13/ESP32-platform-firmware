@@ -40,7 +40,8 @@ typedef enum {
   CMD_QUEUE_OPUS_STREAM,
   CMD_QUEUE_SYNTH,
   CMD_FREQ,
-  CMD_WAVEFORM
+  CMD_WAVEFORM,
+  CMD_CALLBACK
 } sndmixer_cmd_ins_t;
 
 typedef struct {
@@ -49,7 +50,10 @@ typedef struct {
   union {
     struct {
       const void *queue_file_start;
+      const void *seek_func;
       const void *queue_file_end;
+      const void *callback_func;
+      const void *callback_handle;
       int flags;
     };
     struct {
@@ -66,6 +70,8 @@ typedef struct {
   int flags;
   int16_t *buffer;
   int chunksz;
+  const void *callback_func;
+  const void *callback_handle;
   uint32_t dds_rate;  // Rate; 16.16 fixed
   uint32_t dds_acc;   // DDS accumulator, 16.16 fixed
 } sndmixer_channel_t;
@@ -91,6 +97,12 @@ static uint32_t new_id() {
 }
 
 static void clean_up_channel(int ch) {
+  if(channel[ch].callback_handle) {
+    // exec callback
+    callback_type do_callback = channel[ch].callback_func;
+    do_callback(channel[ch].callback_handle,0,0);
+  }
+  
   if (channel[ch].source) {
     channel[ch].source->deinit_source(channel[ch].src_ctx);
     channel[ch].source = NULL;
@@ -118,10 +130,10 @@ static int find_free_channel() {
 }
 
 static int init_source(int ch, const sndmixer_source_t *srcfns, const void *data_start,
-                       const void *data_end) {
+                       const void *data_end, const void *seek_func) {
   int stereo = 0;
   int chunksz =
-      srcfns->init_source(data_start, data_end, samplerate, &channel[ch].src_ctx, &stereo);
+      srcfns->init_source(data_start, data_end, samplerate, &channel[ch].src_ctx, &stereo, seek_func);
   if (chunksz <= 0)
     return 0;  // failed
   channel[ch].source = srcfns;
@@ -154,19 +166,19 @@ static void handle_cmd(sndmixer_cmd_t *cmd) {
     int r = 0;
     printf("Sndmixer: %d: initing source\n", cmd->id);
     if (cmd->cmd == CMD_QUEUE_WAV) {
-      r = init_source(ch, &sndmixer_source_wav, cmd->queue_file_start, cmd->queue_file_end);
+      r = init_source(ch, &sndmixer_source_wav, cmd->queue_file_start, cmd->queue_file_end,0);
     } else if (cmd->cmd == CMD_QUEUE_MOD) {
-      r = init_source(ch, &sndmixer_source_mod, cmd->queue_file_start, cmd->queue_file_end);
+      r = init_source(ch, &sndmixer_source_mod, cmd->queue_file_start, cmd->queue_file_end,0);
     } else if (cmd->cmd == CMD_QUEUE_MP3) {
-      r = init_source(ch, &sndmixer_source_mp3, cmd->queue_file_start, cmd->queue_file_end);
+      r = init_source(ch, &sndmixer_source_mp3, cmd->queue_file_start, cmd->queue_file_end, 0);
     } else if (cmd->cmd == CMD_QUEUE_MP3_STREAM) {
-      r = init_source(ch, &sndmixer_source_mp3_stream, cmd->queue_file_start, cmd->queue_file_end);
+      r = init_source(ch, &sndmixer_source_mp3_stream, cmd->queue_file_start, cmd->queue_file_end, cmd->seek_func);
     } else if (cmd->cmd == CMD_QUEUE_OPUS) {
-      r = init_source(ch, &sndmixer_source_opus, cmd->queue_file_start, cmd->queue_file_end);
+      r = init_source(ch, &sndmixer_source_opus, cmd->queue_file_start, cmd->queue_file_end,0);
     } else if (cmd->cmd == CMD_QUEUE_OPUS_STREAM) {
-      r = init_source(ch, &sndmixer_source_opus_stream, cmd->queue_file_start, cmd->queue_file_end);
+      r = init_source(ch, &sndmixer_source_opus_stream, cmd->queue_file_start, cmd->queue_file_end,0);
     } else if (cmd->cmd == CMD_QUEUE_SYNTH) {
-      r = init_source(ch, &sndmixer_source_synth, 0, 0);
+      r = init_source(ch, &sndmixer_source_synth, 0, 0,0);
     }
     if (!r) {
       printf("Sndmixer: Failed to start decoder for id %d\n", cmd->id);
@@ -218,6 +230,9 @@ static void handle_cmd(sndmixer_cmd_t *cmd) {
       } else {
         printf("Not a synth!\n");
       }
+    } else if (cmd->cmd == CMD_CALLBACK) {
+        channel[ch].callback_handle = cmd->callback_handle;
+        channel[ch].callback_func =  cmd->callback_func;
     }
   }
 }
@@ -249,9 +264,18 @@ static void sndmixer_task(void *arg) {
             // That value is outside the channels chunk buffer. Refill that first.
             int r = chan->source->fill_buffer(chan->src_ctx, chan->buffer, use_stereo);
             if (r == 0) {
-              // Source is done.
-              printf("Sndmixer: %d: cleaning up source because of EOF\n", chan->id);
-              clean_up_channel(ch);
+              // if loop is enabled, reset buffer position to start when no new samples are available
+              if (chan->flags & CHFL_LOOP) {
+                if (chan->source->reset_buffer(chan->src_ctx) < 0) {
+                  printf("Sndmixer: %d: cleaning up source, loop failed\n",chan->id);
+                  clean_up_channel(ch);
+                } else
+                  r = chan->source->fill_buffer(chan->src_ctx, chan->buffer, use_stereo);
+              } else {
+                // Source is done and no loops are requested
+                printf("Sndmixer: %d: cleaning up source because of EOF\n", chan->id);  
+                clean_up_channel(ch);
+              }
               continue;
             }
             int64_t real_rate = chan->source->get_sample_rate(chan->src_ctx);
@@ -358,11 +382,12 @@ int sndmixer_queue_mp3(const void *mp3_start, const void *mp3_end) {
   return id;
 }
 
-int sndmixer_queue_mp3_stream(stream_read_type read_func, void *stream) {
+int sndmixer_queue_mp3_stream(stream_read_type read_func, stream_seek_type seek_func, void *stream) {
   int id             = new_id();
   sndmixer_cmd_t cmd = {.id               = id,
                         .cmd              = CMD_QUEUE_MP3_STREAM,
                         .queue_file_start = (void *)read_func,
+                        .seek_func    = (void *)seek_func,
                         .queue_file_end   = stream,
                         .flags            = CHFL_PAUSED};
   xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
@@ -454,6 +479,15 @@ void sndmixer_freq(int id, uint16_t frequency) {
 void sndmixer_waveform(int id, uint8_t waveform) {
   sndmixer_cmd_t cmd = {.cmd = CMD_WAVEFORM, .id = id, .param = waveform};
   xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
+}
+
+void sndmixer_set_callback(int id, callback_type callback, void *handle) {
+  sndmixer_cmd_t cmd = {.id               = id,
+                        .cmd              = CMD_CALLBACK,
+                        .callback_func    = (void *)callback,
+                        .callback_handle  = handle};
+  xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
+
 }
 
 #endif

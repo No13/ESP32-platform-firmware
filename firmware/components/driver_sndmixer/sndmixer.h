@@ -11,12 +11,14 @@ extern "C" {
 typedef struct {
   /*! Initialize the sound source. Returns size of data returned per call of fill_buffer. */
   int (*init_source)(const void *data_start, const void *data_end, int req_sample_rate, void **ctx,
-                     int *stereo);
+                     int *stereo, const void *seek_func);
   /*! Get the actual sample rate at which the source returns data */
   int (*get_sample_rate)(void *ctx);
   /*! Decode a bufferful of data. Returns 0 when file ended or something went wrong. Returns amount
    * of bytes in buffer (normally what init_source returned) otherwise. */
   int (*fill_buffer)(void *ctx, int16_t *buffer, int stereo);
+  /*! Reset buffer, loop sample */
+  int (*reset_buffer)(void *ctx);
   /*! Destroy source, free resources */
   void (*deinit_source)(void *ctx);
   /*! Set frequency of synthesizer */
@@ -74,13 +76,12 @@ int sndmixer_queue_mp3(const void *mp3_start, const void *mp3_end);
 int sndmixer_queue_opus(const void *mp3_start, const void *mp3_end);
 
 typedef ssize_t (*stream_read_type)(void *, void *, size_t);
-int sndmixer_queue_mp3_stream(stream_read_type read_func, void *stream);
+typedef ssize_t (*stream_seek_type)(void *, size_t, size_t);
+int sndmixer_queue_mp3_stream(stream_read_type read_func, stream_seek_type seek_func, void *stream);
 int sndmixer_queue_opus_stream(stream_read_type read_func, void *stream);
 
 /**
  * @brief Set or unset a sound to looping mode
- *
- * @warning This may not be implemented yet. TODO: remove this warning when implemented.
  *
  * @param id ID of the sound, obtained when queueing it
  * @param loop If true, the sound will loop back to the beginning when it ends.
@@ -145,6 +146,16 @@ void sndmixer_resume_all();
 int sndmixer_queue_synth();
 void sndmixer_freq(int id, uint16_t frequency);
 void sndmixer_waveform(int id, uint8_t waveform);
+
+typedef ssize_t (*callback_type)(void *, size_t, size_t);
+
+/**
+ * @brief Set a callback function to execute after the sample has finished
+ *
+ * @param id ID of the sound, obtained when queueing it
+ * @param loop If true, the sound will loop back to the beginning when it ends.
+ */
+void sndmixer_set_callback(int id, callback_type callback, void *handle);
 
 #ifdef __cplusplus
 }
