@@ -3,11 +3,11 @@ import _thread, time, socket, network
 class webserver:
     
     _http_socket = None
-    _sta = None
     _paths = {}
+    _port = 80
     _server = None
-    def __init__(self):
-        self._sta = network.WLAN(network.STA_IF)
+    def __init__(self,port=80):
+        self._port = port
 
     def on_path(self,path,function):
         self._paths[path] = function
@@ -33,7 +33,7 @@ class webserver:
     def webserver_thread(self,callback):
         # Not sure if this needs to be global...
         global http_socket
-        addr = socket.getaddrinfo('0.0.0.0', 80)[0][-1]
+        addr = socket.getaddrinfo('0.0.0.0', self._port)[0][-1]
         http_socket = socket.socket()
         http_socket.bind(addr)
         http_socket.listen(True)
