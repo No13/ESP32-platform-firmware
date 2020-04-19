@@ -4,6 +4,7 @@ class webserver:
     
     _http_socket = None
     _paths = {}
+    _redirects = {}
     _port = 80
     _server = None
     def __init__(self,port=80):
@@ -12,6 +13,10 @@ class webserver:
     def on_path(self,path,function):
         self._paths[path] = function
         return True
+    
+    def add_redirect(self,path,redirect):
+        self._redirects[path] = redirect
+        return True
 
     def start(self):
         self._server = _thread.start_new_thread("webserver",self.webserver_thread,[self.handle_request])
@@ -19,12 +24,17 @@ class webserver:
     def handle_request(self,data):
         try:
             path = data['url'].split("?")[0]
-
-            if path in self._paths:
-                response = 'HTTP/1.0 200 OK\r\n\r\n'
-                response += self._paths[path](data)
+            if path in self._redirects:
+                response = "HTTP/1.0 302 found\r\n"
+                response += "Location: "
+                response += self._redirects[path]
+                response += "\r\n\r\n" 
             else:
-                response = "HTTP/1.0 404 Not Found\r\n\r\n<pre>Request could not be processed.</pre>"
+                if path in self._paths:
+                    response = 'HTTP/1.0 200 OK\r\n\r\n'
+                    response += self._paths[path](data)
+                else:
+                    response = "HTTP/1.0 404 Not Found\r\n\r\n<pre>Request could not be processed.</pre>"
             data['socket'].send(response)
             data['socket'].close()
         except BaseException as e:
@@ -70,7 +80,7 @@ class webserver:
                     if postdata == {}:
                         req = { 'client': addr[0], 'method': http_method, 'url': temp_request[1], 'socket': cl }
                     else:
-                        req = { 'client': addr[0], 'method': temp_request[0], 'url': temp_request[1], 'postdata': postdata, 'socket': cl }
+                        req = { 'client': addr[0], 'method': http_method, 'url': temp_request[1], 'postdata': postdata, 'socket': cl }
                     callback(req)
                 except BaseException as e:
                     print("Invalid request",e, request)
