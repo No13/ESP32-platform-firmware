@@ -1,4 +1,4 @@
-import system, virtualtimers, display, keypad, touchpads, audio, valuestore, wifi
+import system, virtualtimers, display, keypad, touchpads, audio, valuestore, wifi, ugTTS
 import term_menu
 
 LONG_PRESS_MS = const(1000)
@@ -20,6 +20,39 @@ def update():
 
 presses = {}
 page = 0
+
+def updateMp3Cache():
+    global apps
+    mp3files = os.listdir('/cache')
+    freediskpercent = int(os.statvfs('/cache')[3] / (os.statvfs('/cache')[2] / 100))
+    if freediskpercent > 25: # do not fill filesystem when free space < 25%
+        if not wifi.status():
+            wifi.connect()
+            wifi.wait()
+            wifi.connect()
+        for app_index in apps:
+            try:
+                app = apps[app_index]
+                mp3file = app['slug']+'.mp3'
+                if mp3file not in mp3files:
+                    download_tts(app)
+            except:
+                pass
+    else:
+        print("Flash almost full, skipping text-to-speech")
+            
+def download_tts(app):
+    tts_text = app['name'].replace(' ','-')
+    print("Preparing TTS: ",tts_text)
+    if ' ' in tts_text:
+        print("Invalid characters for tts")
+        return False
+    try:
+        ugTTS.text_to_mp3(tts_text, '/cache/'+app['slug']+'.mp3')
+        print("TTS: Succes")
+        return True
+    except:
+        return False
 
 def get_app(key_index):
     app_index = str(key_index + (16 * page))
@@ -44,6 +77,8 @@ def start_app(key_index):
     print('got app', app)
     if app is not None:
         system.start(app['slug'])
+    else:
+        updateMp3Cache()
 
 def play_app_audio(key_index):
     app = get_app(key_index)
