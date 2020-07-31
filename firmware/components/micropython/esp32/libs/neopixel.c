@@ -32,7 +32,7 @@
 
 #include "libs/neopixel.h"
 #include "esp_log.h"
-
+#include "soc/dport_reg.h"
 static xSemaphoreHandle neopixel_sem = NULL;
 static intr_handle_t rmt_intr_handle = NULL;
 static rmt_channel_t RMTchannel = RMT_CHANNEL_0;

@@ -46,7 +46,7 @@
 #include "mphalport.h"
 #include "modmachine.h"
 #include "mpsleep.h"
-
+#include "esp_sleep.h"
 #include "driver_rtcmem.h"
 
 extern int MainTaskCore;
