@@ -27,17 +27,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
+#define u8_t uint8_t
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "lwip/ip_addr.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_task_wdt.h"
-#include "rom/ets_sys.h"
+#include "esp32/rom/ets_sys.h"
 #include "rom/rtc.h"
 #include "rom/gpio.h"
 #include "soc/rtc.h"

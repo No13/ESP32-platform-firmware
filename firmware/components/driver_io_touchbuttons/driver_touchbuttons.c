@@ -12,7 +12,7 @@
 
 #include "driver/touch_pad.h"
 #include "include/driver_touchbuttons.h"
-
+#include "esp_sleep.h"
 #ifdef CONFIG_DRIVER_IO_TOUCHBUTTONS_ENABLE
 
 #define TAG "io_touchbuttons"

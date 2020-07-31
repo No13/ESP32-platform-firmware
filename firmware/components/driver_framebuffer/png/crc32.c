@@ -8,7 +8,7 @@
 #ifdef USE_ESP32_ROM_CRC32
 
 #include <rom/crc.h>
-#include <rom/ets_sys.h>
+#include <esp32/rom/ets_sys.h>
 uint32_t
 lib_crc32(const uint8_t *buf, size_t buf_len, uint32_t crc)
 {

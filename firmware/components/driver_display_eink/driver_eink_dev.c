@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <rom/ets_sys.h>
+#include <esp32/rom/ets_sys.h>
 #include <rom/gpio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>

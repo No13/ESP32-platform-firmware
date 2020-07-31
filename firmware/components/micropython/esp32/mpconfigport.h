@@ -29,7 +29,7 @@
 
 #include <stdint.h>
 #include <alloca.h>
-#include "rom/ets_sys.h"
+#include "esp32/rom/ets_sys.h"
 #include "sdkconfig.h"
 
 // ------------------------------------------------------------

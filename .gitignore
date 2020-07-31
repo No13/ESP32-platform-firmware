@@ -8,6 +8,6 @@ cmake-build-debug
 *qstrdefs.generated.h
 __pycache__
 .vscode
-xtensa-esp32-elf
+xtensa-esp32-el*
 monitor
 flash

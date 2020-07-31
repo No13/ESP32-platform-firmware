@@ -127,7 +127,7 @@ void driver_i2s_sound_push(int16_t *buf, int len, int stereo_input) {
 #endif
     }
 
-    i2s_write_bytes(g_i2s_port, (char *)tmpb, plen * 2 * sizeof(tmpb[0]), portMAX_DELAY);
+    i2s_write(g_i2s_port, (char *)tmpb, plen * 2 * sizeof(tmpb[0]), 0,portMAX_DELAY);
     i += plen;
   }
 }
